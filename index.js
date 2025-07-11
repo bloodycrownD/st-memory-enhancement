@@ -605,9 +605,10 @@ function getEmptyTablePrompt(Required, node) {
  * @returns
  */
 function getTableEditRules(structure, isEmpty) {
-    if (structure.Required && isEmpty) return '【增删改触发条件】\n插入：' + replaceUserTag(structure.initNode) + '\n'
+    //删除了【增删改触发条件】
+    if (structure.Required && isEmpty) return '插入：' + replaceUserTag(structure.initNode) + '\n'
     else {
-        let editRules = '【增删改触发条件】\n'
+        let editRules = ''
         if (structure.insertNode) editRules += ('插入：' + replaceUserTag(structure.insertNode) + '\n')
         if (structure.updateNode) editRules += ('更新：' + replaceUserTag(structure.updateNode) + '\n')
         if (structure.deleteNode) editRules += ('删除：' + replaceUserTag(structure.deleteNode) + '\n')
@@ -711,7 +712,8 @@ class Table {
             result += node;
         }
         if (customParts.includes('headers')) {
-            result += '【表格内容】\n' + headers;
+            //删除【表格内容】
+            result += headers;
         }
         if (customParts.includes('rows')) {
             result += rows;
