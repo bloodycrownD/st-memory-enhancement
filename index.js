@@ -2362,21 +2362,29 @@ async function clearTable(mesId, tableContainer) {
         toastr.success('清空成功')
     }
 }
-
 /**
  * 解析HTML并替换表格渲染逻辑（支持表头批量替换和列占位符循环渲染）
  * 规则：
- * 1. $字母0 形式为表头（如 $A0 代表第一列标题）
+ * 1. $字母0 形式为表头（如 $A0 或 $AA0 代表列标题）
  * 2. <$字母> 作为列占位符，自动循环所有数据行生成内容
- * 3.原始HTML只需包含表头和一行的美化模板，多行自动拼接
+ * 3. 原始HTML只需包含表头和一行的美化模板，多行自动拼接
  */
 function parseTableRender(html, table) {
-    if (!html) return table?.render() || "";
+    if (!html) return table?.render?.() || "";
     if (!table?.columns || !table?.content) return html;
 
-    // 阶段1：替换表头 $A0 格式
-    html = html.replace(/\$(\w)0/g, (_, colLetter) => {
-        const colIndex = colLetter.toUpperCase().charCodeAt(0) - 65;
+    // 将列字母转换为列索引（支持多字母如 AA、AB 等）
+    function columnToIndex(colStr) {
+        let index = 0;
+        for (let i = 0; i < colStr.length; i++) {
+            index = index * 26 + (colStr.toUpperCase().charCodeAt(i) - 64);
+        }
+        return index - 1; // 转换为 0-based 索引
+    }
+
+    // 阶段1：替换表头 $A0 或 $AA0 格式
+    html = html.replace(/\$([A-Z]+)0/g, (_, colLetters) => {
+        const colIndex = columnToIndex(colLetters);
         return table.columns[colIndex] || `<span style="color:red">[无效表头]</span>`;
     });
 
@@ -2389,23 +2397,23 @@ function parseTableRender(html, table) {
         const [fullMatch, trStart, innerTemplate, trEnd] = rowTemplateMatch;
         table.content.forEach(rowData => {
             let rowHtml = innerTemplate;
-            // 列循环替换(支持表头二次替换)
+            // 列循环替换（支持表头二次替换）
             rowHtml = rowHtml
-                .replace(/\$(\w)0/g, (_, l) => table.columns[l.charCodeAt(0) - 65] || '') // 再次处理表头
-                .replace(/<\$(\w)>/gi, (_, l) => rowData[l.charCodeAt(0) - 65] || '');
+                .replace(/\$([A-Z]+)0/g, (_, l) => table.columns[columnToIndex(l)] || '')
+                .replace(/<\$([A-Z]+)>/gi, (_, l) => rowData[columnToIndex(l)] || '');
             renderedRows.push(`${trStart}${rowHtml}${trEnd}`);
         });
         html = html.replace(fullMatch, renderedRows.join('\n'));
     }
     // 情况2：无<tr>标签时按自由格式处理
     else {
-        const templateHasPlaceholder = /<\$\w>/.test(html);
+        const templateHasPlaceholder = /<\$[A-Z]+>/.test(html);
         table.content.forEach(rowData => {
             let rowHtml = html
-                // 表头动态循环(支持同模板内混用)
-                .replace(/\$(\w)0/g, (_, l) => table.columns[l.charCodeAt(0) - 65] || '')
+                // 表头动态循环（支持同模板内混用）
+                .replace(/\$([A-Z]+)0/g, (_, l) => table.columns[columnToIndex(l)] || '')
                 // 数据动态替换
-                .replace(/<\$(\w)>/gi, (_, l) => rowData[l.charCodeAt(0) - 65] || '');
+                .replace(/<\$([A-Z]+)>/gi, (_, l) => rowData[columnToIndex(l)] || '');
             renderedRows.push(templateHasPlaceholder ? rowHtml : html);
         });
         html = renderedRows.join(templateHasPlaceholder ? '\n' : '');
@@ -2413,7 +2421,6 @@ function parseTableRender(html, table) {
 
     return html;
 }
-
 /**
  * +.将table数据推送至聊天内容中显示
  * @param tableStatusHTML 表格状态html
