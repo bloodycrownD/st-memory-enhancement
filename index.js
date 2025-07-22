@@ -894,23 +894,31 @@ function replaceUserTag(str) {
  * 在表格末尾插入行
  * @param {number} tableIndex 表格索引
  * @param {object} data 插入的数据
- * @returns 新插入行的索引
+ * @returns 新插入行的索引或更新行的索引
  */
 function insertRow(tableIndex, data) {
     if (tableIndex == null) return toastr.error('insert函数，tableIndex函数为空');
     if (data == null) return toastr.error('insert函数，data函数为空');
+    
     const table = waitingTable[tableIndex];
     const newRow = Object.entries(data)
         .reduce((row, [key, value]) => {
             row[parseInt(key)] = handleCellValue(value);
             return row;
         }, new Array(table.columns.length).fill(""));
-    const dataStr = JSON.stringify(newRow);
-    // 检查是否已存在相同行
-    if (table.content.some(row => JSON.stringify(row) === dataStr)) {
-        console.log(`跳过重复插入: table ${tableIndex}, data ${dataStr}`);
-        return -1; // 返回-1表示未插入
+    
+    // 检查第一列（主键）是否已存在
+    const primaryKey = newRow[0]; // 假设第一列是主键
+    const existingRowIndex = table.content.findIndex(row => row[0] === primaryKey);
+    
+    if (existingRowIndex !== -1) {
+        // 如果找到重复的主键，更新现有行
+        table.update(existingRowIndex, data);
+        console.log(`更新现有行: table ${tableIndex}, row ${existingRowIndex}`);
+        return existingRowIndex;
     }
+    
+    // 没有重复，插入新行
     const newRowIndex = table.insert(data);
     console.log(`插入成功: table ${tableIndex}, row ${newRowIndex}`);
     return newRowIndex;
