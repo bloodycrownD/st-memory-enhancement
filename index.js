@@ -2370,6 +2370,7 @@ async function clearTable(mesId, tableContainer) {
         toastr.success('清空成功')
     }
 }
+
 /**
  * 解析HTML并替换表格渲染逻辑（支持表头批量替换和列占位符循环渲染）
  * 规则：
@@ -2389,7 +2390,6 @@ function parseTableRender(html, table) {
         }
         return index - 1; // 转换为 0-based 索引
     }
-
     // 阶段1：替换表头 $A0 或 $AA0 格式
     html = html.replace(/\$([A-Z]+)0/g, (_, colLetters) => {
         const colIndex = columnToIndex(colLetters);
@@ -2408,7 +2408,8 @@ function parseTableRender(html, table) {
             // 列循环替换（支持表头二次替换）
             rowHtml = rowHtml
                 .replace(/\$([A-Z]+)0/g, (_, l) => table.columns[columnToIndex(l)] || '')
-                .replace(/<\$([A-Z]+)>/gi, (_, l) => rowData[columnToIndex(l)] || '');
+                .replace(/<\$([A-Z]+)>/gi, (_, l) => rowData[columnToIndex(l)] || '')
+                .replace(/\$uid/g,generateUniId());
             renderedRows.push(`${trStart}${rowHtml}${trEnd}`);
         });
         html = html.replace(fullMatch, renderedRows.join('\n'));
@@ -2421,7 +2422,8 @@ function parseTableRender(html, table) {
                 // 表头动态循环（支持同模板内混用）
                 .replace(/\$([A-Z]+)0/g, (_, l) => table.columns[columnToIndex(l)] || '')
                 // 数据动态替换
-                .replace(/<\$([A-Z]+)>/gi, (_, l) => rowData[columnToIndex(l)] || '');
+                .replace(/<\$([A-Z]+)>/gi, (_, l) => rowData[columnToIndex(l)] || '')
+                .replace(/\$uid/g,generateUniId());
             renderedRows.push(templateHasPlaceholder ? rowHtml : html);
         });
         html = renderedRows.join(templateHasPlaceholder ? '\n' : '');
