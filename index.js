@@ -1216,7 +1216,7 @@ function handleEditStrInMessage(chat, mesIndex = -1, ignoreCheck = false) {
  * @param {boolean} ignoreCheck 是否跳过重复性检查
  */
 function parseTableEditTag(chat, mesIndex = -1, ignoreCheck = false) {
-    const { matches } = getTableEditTag(chat?.mes)
+    const { matches } = getTableEditTag(chat.mes)
     if (!ignoreCheck && !isTableEditStrChanged(chat, matches)) return false
     const functionList = handleTableEditTag(matches)
     // 寻找最近的表格数据
@@ -1293,10 +1293,10 @@ function replaceSubstring(text, startIndex, endIndex, replacement) {
  */
 function replaceOrAddTableEditTag(chat, newContent) {
     // 处理 mes
-    if (/<tableEdit>.*?<\/tableEdit>/gs.test(chat?.mes)) {
-        chat?.mes = replaceTableEditTag(chat?.mes, newContent)
+    if (/<tableEdit>.*?<\/tableEdit>/gs.test(chat.mes)) {
+        chat.mes = replaceTableEditTag(chat.mes, newContent)
     } else {
-        chat?.mes += `\n<tableEdit>${newContent}</tableEdit>`;
+        chat.mes += `\n<tableEdit>${newContent}</tableEdit>`;
     }
     // 处理 swipes
     if (chat.swipes != null && chat.swipe_id != null)
