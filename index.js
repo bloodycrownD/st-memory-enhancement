@@ -835,46 +835,80 @@ class Table {
      * 把表格数据渲染成DOM元素
      * @returns DOM容器元素
      */
+    /**
+  * 把表格数据渲染成DOM元素
+  * @returns DOM容器元素
+  */
     render() {
         const container = document.createElement('div')
         container.classList.add('justifyLeft')
         container.classList.add('scrollable')
+
         const title = document.createElement('h3')
         title.innerText = replaceUserTag(this.tableName)
+
         const table = document.createElement('table')
         if (userTableEditInfo.editAble) {
-            $(table).on('click', 'td', onTdClick)
-            $(table).on('click', 'th', onTdClick)
+            $(table).on('click', 'td:not(td:first-child)', onTdClick)  // 排除第一列
+            $(table).on('click', 'th:not(th:first-child)', onTdClick)
         }
         table.classList.add('tableDom')
+
         const thead = document.createElement('thead')
         const titleTr = document.createElement('tr')
-        this.columns.forEach(colName => {
+
+        // 添加序号列的表头
+        const thIndex = document.createElement('th')
+        thIndex.innerText = '序号'
+        $(thIndex).data("tableData", this.tableIndex + '-0--1') // 特殊标记，或使用 -1 表示序号列
+        titleTr.appendChild(thIndex)
+
+        // 添加原始列头
+        this.columns.forEach((colName, colIndex) => {
             const th = document.createElement('th')
-            $(th).data("tableData", this.tableIndex + '-0-0')
+            $(th).data("tableData", this.tableIndex + '-0-' + colIndex)
             th.innerText = replaceUserTag(colName)
             titleTr.appendChild(th)
         })
         thead.appendChild(titleTr)
         table.appendChild(thead)
+
         const tbody = document.createElement('tbody')
         for (let rowIndex in this.content) {
             const tr = document.createElement('tr')
+
+            // 添加序号单元格（第一列）
+            const tdIndex = document.createElement('td')
+            $(tdIndex).data("tableData", this.tableIndex + '-' + rowIndex + '-index') // 可自定义标识
+            tdIndex.innerText = parseInt(rowIndex) + 1 // 从1开始编号
+            $(tdIndex).css('font-weight', 'bold') // 可选：让序号更醒目
+            tr.appendChild(tdIndex)
+
+            // 添加原始数据列
             for (let cellIndex in this.content[rowIndex]) {
                 const td = document.createElement('td')
                 $(td).data("tableData", this.tableIndex + '-' + rowIndex + '-' + cellIndex)
                 td.innerText = this.content[rowIndex][cellIndex]
-                if (this.updatedRows && this.updatedRows.includes(rowIndex + '-' + cellIndex)) $(td).css('background-color', 'rgba(0, 98, 128, 0.2)')
+
+                // 高亮更新的单元格
+                if (this.updatedRows && this.updatedRows.includes(rowIndex + '-' + cellIndex)) {
+                    $(td).css('background-color', 'rgba(0, 98, 128, 0.2)')
+                }
                 tr.appendChild(td)
             }
+
+            // 高亮整行（插入行）
             if (this.insertedRows && this.insertedRows.includes(parseInt(rowIndex))) {
                 $(tr).css('background-color', 'rgba(0, 128, 0, 0.2)')
             }
+
             tbody.appendChild(tr)
         }
+
         table.appendChild(tbody)
         container.appendChild(title)
         container.appendChild(table)
+
         return container
     }
 }
@@ -899,25 +933,25 @@ function replaceUserTag(str) {
 function insertRow(tableIndex, data) {
     if (tableIndex == null) return toastr.error('insert函数，tableIndex函数为空');
     if (data == null) return toastr.error('insert函数，data函数为空');
-    
+
     const table = waitingTable[tableIndex];
     const newRow = Object.entries(data)
         .reduce((row, [key, value]) => {
             row[parseInt(key)] = handleCellValue(value);
             return row;
         }, new Array(table.columns.length).fill(""));
-    
+
     // 检查第一列（主键）是否已存在
     const primaryKey = newRow[0]; // 假设第一列是主键
     const existingRowIndex = table.content.findIndex(row => row[0] === primaryKey);
-    
+
     if (existingRowIndex !== -1) {
         // 如果找到重复的主键，更新现有行
         table.update(existingRowIndex, data);
         console.log(`更新现有行: table ${tableIndex}, row ${existingRowIndex}`);
         return existingRowIndex;
     }
-    
+
     // 没有重复，插入新行
     const newRowIndex = table.insert(data);
     console.log(`插入成功: table ${tableIndex}, row ${newRowIndex}`);
@@ -1512,7 +1546,7 @@ async function onMessageEdited(this_edit_mes_id) {
  * @param mes_id 删除后的消息长度
  */
 async function onMessageDeleted() {
-    const {index} = findLastestTableData(true)
+    const { index } = findLastestTableData(true)
     const chat = getContext().chat[index]
     if (extension_settings.muyoo_dataTable.isExtensionAble === false) return
     try {
@@ -2409,7 +2443,7 @@ function parseTableRender(html, table) {
             rowHtml = rowHtml
                 .replace(/\$([A-Z]+)0/g, (_, l) => table.columns[columnToIndex(l)] || '')
                 .replace(/<\$([A-Z]+)>/gi, (_, l) => rowData[columnToIndex(l)] || '')
-                .replace(/\$uid/g,generateUniId());
+                .replace(/\$uid/g, generateUniId());
             renderedRows.push(`${trStart}${rowHtml}${trEnd}`);
         });
         html = html.replace(fullMatch, renderedRows.join('\n'));
@@ -2423,7 +2457,7 @@ function parseTableRender(html, table) {
                 .replace(/\$([A-Z]+)0/g, (_, l) => table.columns[columnToIndex(l)] || '')
                 // 数据动态替换
                 .replace(/<\$([A-Z]+)>/gi, (_, l) => rowData[columnToIndex(l)] || '')
-                .replace(/\$uid/g,generateUniId());
+                .replace(/\$uid/g, generateUniId());
             renderedRows.push(templateHasPlaceholder ? rowHtml : html);
         });
         html = renderedRows.join(templateHasPlaceholder ? '\n' : '');
