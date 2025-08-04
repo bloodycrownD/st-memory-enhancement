@@ -11,19 +11,25 @@
     <div class="dataTable_tablePrompt_list">
         <label>表格名</label>
         <input type="text" id="dataTable_tableSetting_tableName" class="margin0 text_pole" style=" margin-bottom: 20px;"/>
-        <label>表格说明</label><small> (给AI解释此表格的作用)</small>
-        <textarea id="dataTable_tableSetting_note" class="wide100p" rows="2"></textarea>
+        <div style="display: none;">
+            <label>表格说明</label><small> (给AI解释此表格的作用)</small>
+            <textarea id="dataTable_tableSetting_note" class="wide100p" rows="2"></textarea>
+            <label>初始化提示词</label><small> (当表格为必填表时，但是又为空时，给AI的提示)</small>
+            <textarea id="dataTable_tableSetting_initNode" class="wide100p" rows="2"></textarea>
+            <label>插入提示词</label><small> (解释什么时候应该插入行)</small>
+            <textarea id="dataTable_tableSetting_insertNode" class="wide100p" rows="2"></textarea>
+            <label>更新提示词</label><small> (解释什么时候应该更新行)</small>
+            <textarea id="dataTable_tableSetting_updateNode" class="wide100p" rows="2"></textarea>
+            <label>删除提示词</label><small> (解释什么时候应该删除行)</small>
+            <textarea id="dataTable_tableSetting_deleteNode" class="wide100p" rows="2"></textarea>
+        </div>
+
         <div class="checkbox flex-container" style="margin-bottom: 10px;">
             <input type="checkbox" id="dataTable_tableSetting_required"><span>是否必填</span>
         </div>
-        <label>初始化提示词</label><small> (当表格为必填表时，但是又为空时，给AI的提示)</small>
-        <textarea id="dataTable_tableSetting_initNode" class="wide100p" rows="2"></textarea>
-        <label>插入提示词</label><small> (解释什么时候应该插入行)</small>
-        <textarea id="dataTable_tableSetting_insertNode" class="wide100p" rows="2"></textarea>
-        <label>更新提示词</label><small> (解释什么时候应该更新行)</small>
-        <textarea id="dataTable_tableSetting_updateNode" class="wide100p" rows="2"></textarea>
-        <label>删除提示词</label><small> (解释什么时候应该删除行)</small>
-        <textarea id="dataTable_tableSetting_deleteNode" class="wide100p" rows="2"></textarea>
+        <div class="checkbox flex-container" style="margin-bottom: 10px;">
+            <input type="checkbox" id="dataTable_tableSetting_vue_mod"><span>开启vue渲染</span>
+        </div>
 
         <!-- 开启时将该表格推送至对话 -->
         <div class="checkbox flex-container" style="margin-bottom: 10px;">

@@ -1973,6 +1973,7 @@ async function openTableSettingPopup(tableIndex) {
     const $updateNode = $dlg.find('#dataTable_tableSetting_updateNode');
     const $insertNode = $dlg.find('#dataTable_tableSetting_insertNode');
     const $deleteNode = $dlg.find('#dataTable_tableSetting_deleteNode');
+    const $vueMod = $dlg.find('#dataTable_tableSetting_vue_mod');
     const $required = $dlg.find('#dataTable_tableSetting_required');
     const $toChat = $dlg.find('#dataTable_tableSetting_toChat');        // +.新增发送到聊天，当开启时该表格发送到聊天
     const $tableRender = $dlg.find('#dataTable_tableSetting_tableRender');  // +.新增该表格的自定义html渲染
@@ -1983,6 +1984,7 @@ async function openTableSettingPopup(tableIndex) {
     $updateNode.val(tableStructure.updateNode);
     $insertNode.val(tableStructure.insertNode);
     $deleteNode.val(tableStructure.deleteNode);
+    $vueMod.prop('checked', tableStructure.vueMod);
     $required.prop('checked', tableStructure.Required);
     $toChat.prop('checked', tableStructure.toChat ?? false);     // +.
     $tableRender.val(tableStructure.tableRender);       // +.
@@ -1996,6 +1998,7 @@ async function openTableSettingPopup(tableIndex) {
     $updateNode.on('change', function () { changeEvent("updateNode", $(this).val()); });
     $insertNode.on('change', function () { changeEvent("insertNode", $(this).val()); });
     $deleteNode.on('change', function () { changeEvent("deleteNode", $(this).val()); });
+    $vueMod.on('change', function () { tableStructure.vueMod = $(this).prop('checked'); });
     $required.on('change', function () { tableStructure.Required = $(this).prop('checked'); });
     $toChat.on('change', function () { tableStructure.toChat = $(this).prop('checked'); });         // +.
     $tableRender.on('change', function () { changeEvent("tableRender", $(this).val()); });      // +.
@@ -2415,6 +2418,120 @@ async function clearTable(mesId, tableContainer) {
 function parseTableRender(html, table) {
     if (!html) return table?.render?.() || "";
     if (!table?.columns || !table?.content) return html;
+    /**
+ * 解析HTML并替换表格渲染逻辑（支持表头批量替换和列占位符循环渲染）
+ * 规则：
+ * 1. $字母0 形式为表头（如 $A0 代表第一列标题）
+ * 2. <$字母> 作为列占位符，自动循环所有数据行生成内容 (传统模式)
+ * 3. vueMod开启时，支持 v-for 指令渲染 (Vue模式)
+ *    - v-for="row in data" 或 v-for="(row, index) in data"
+ *    - 支持的占位符: {{ row[0] }}, {{ row[1] }}, ... 以及 {{ index }}
+ * 4. 原始HTML只需包含表头和一行的美化模板，多行自动拼接
+ */
+function parseTableRender(html, table) {
+    if (!html) return table?.render() || "";
+    if (!table?.columns || !table?.content) return html;
+    const tableStructure = findTableStructureByIndex(_currentTableIndex);
+
+    // ------------------- [Vue 模式代码开始 - 简化版] -------------------
+    if (tableStructure?.vueMod) {
+        // 步骤1: 查找带有 v-for 的元素块
+        const vForRegex = /(<(\w+)\b[^>]*\s+v-for\s*=\s*['"]([^'"]+)['"][^>]*>)([\s\S]*?)<\/\2>/i;
+        const vForMatch = html.match(vForRegex);
+
+        if (vForMatch) {
+            const [
+                fullBlock,      // e.g., <tr v-for... >...</tr>
+                openingTag,     // e.g., <tr v-for="..." class="item">
+                tagName,        // e.g., "tr"
+                vForExpression, // e.g., "(row, index) in data"
+                template        // e.g., <td>{{ row[0] }}</td>
+            ] = vForMatch;
+
+            // 步骤2: 解析 v-for 表达式
+            const expressionRegex = /^\(?\s*(\w+)\s*(?:,\s*(\w+)\s*)?\)?\s+in\s+\w+$/i;
+            const expressionMatch = vForExpression.match(expressionRegex);
+
+            if (expressionMatch) {
+                const itemAlias = expressionMatch[1];  // e.g., "row"
+                const indexAlias = expressionMatch[2]; // e.g., "index"
+
+                // 步骤3: 预先替换模板中的表头占位符 ($A0, $B0...)
+                let processedHtml = html.replace(/\$(\w)0/g, (_, colLetter) => {
+                    const colIndex = colLetter.toUpperCase().charCodeAt(0) - 65;
+                    return table.columns[colIndex] || '';
+                });
+
+                // 准备用于循环的起始标签 (移除 v-for 属性)
+                const loopOpeningTag = openingTag.replace(/\s+v-for\s*=\s*['"][^'"]+['"]/, '');
+                const loopClosingTag = `</${tagName}>`;
+
+                // 步骤4: 循环数据行，生成最终HTML
+                const renderedRows = table.content.map((rowData, rowIndex) => {
+                    let currentRowHtml = template;
+
+                    // 替换索引占位符 {{ index }}
+                    if (indexAlias) {
+                        currentRowHtml = currentRowHtml.replace(new RegExp(`{{\\s*${indexAlias}\\s*}}`, 'g'), rowIndex);
+                    }
+
+                    // 替换数据占位符 {{ row[0] }}, {{ row[1] }}, ...
+                    rowData.forEach((cellData, colIndex) => {
+                        const safeCellData = cellData == null ? '' : String(cellData);
+                        // 创建动态正则，例如：/{{\s*row\[0\]\s*}}/g
+                        const placeholderRegex = new RegExp(`{{\\s*${itemAlias}\\[${colIndex}\\]\\s*}}`, 'g');
+                        currentRowHtml = currentRowHtml.replace(placeholderRegex, safeCellData);
+                    });
+
+                    return `${loopOpeningTag}${currentRowHtml}${loopClosingTag}`;
+                }).join('\n');
+
+                // 步骤5: 将渲染好的行替换回原始模板的 v-for 位置
+                processedHtml = processedHtml.replace(fullBlock, renderedRows);
+                return processedHtml;
+            }
+        }
+
+        // 如果是vue模式但未找到有效的v-for, 仍执行基本的表头替换后返回
+        return html.replace(/\$(\w)0/g, (_, colLetter) => {
+             const colIndex = colLetter.toUpperCase().charCodeAt(0) - 65;
+             return table.columns[colIndex] || `<span style="color:red">[无效表头]</span>`;
+        });
+    }
+    // ------------------- [Vue 模式代码结束] -------------------
+
+    // 阶段1：替换表头 $A0 格式
+    html = html.replace(/\$(\w)0/g, (_, colLetter) => {
+        const colIndex = colLetter.toUpperCase().charCodeAt(0) - 65;
+        return table.columns[colIndex] || `<span style="color:red">[无效表头]</span>`;
+    });
+
+    // 阶段2：智能处理数据行模板 (传统模式)
+    let renderedRows = [];
+    const rowTemplateMatch = html.match(/(<tr\b[^>]*>)([\s\S]*?)(<\/tr>)/i);
+    if (rowTemplateMatch) {
+        const [fullMatch, trStart, innerTemplate, trEnd] = rowTemplateMatch;
+        table.content.forEach(rowData => {
+            let rowHtml = innerTemplate
+                .replace(/\$(\w)0/g, (_, l) => table.columns[l.charCodeAt(0) - 65] || '')
+                .replace(/<\$(\w)>/gi, (_, l) => rowData[l.charCodeAt(0) - 65] || '');
+            renderedRows.push(`${trStart}${rowHtml}${trEnd}`);
+        });
+        html = html.replace(fullMatch, renderedRows.join('\n'));
+    }
+    else {
+        const templateHasPlaceholder = /<\$\w>/.test(html);
+        table.content.forEach(rowData => {
+            let rowHtml = html
+                .replace(/\$(\w)0/g, (_, l) => table.columns[l.charCodeAt(0) - 65] || '')
+                .replace(/<\$(\w)>/gi, (_, l) => rowData[l.charCodeAt(0) - 65] || '');
+            renderedRows.push(templateHasPlaceholder ? rowHtml : html);
+        });
+        html = renderedRows.join(templateHasPlaceholder ? '\n' : '');
+    }
+
+    return html;
+}
 
     // 将列字母转换为列索引（支持多字母如 AA、AB 等）
     function columnToIndex(colStr) {
