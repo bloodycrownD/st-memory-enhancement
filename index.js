@@ -3068,7 +3068,57 @@ const tableInitPopupDom = `<span>将重置以下表格数据，是否继续？</
 </div>
 `
 
-
+function registerSingleTableMacro() {
+    for (let i = 0; i < 10; i++) {
+        getContext().registerMacro(`tableData[${i}]`, () =>  {
+            try {
+                if (extension_settings.muyoo_dataTable.isExtensionAble === false || extension_settings.muyoo_dataTable.isAiReadTable === false) return ""
+                const { tables } = findLastestTableData(true)
+                if(i > tables.length - 1){
+                    return "表格不存在，超出索引范围"
+                }else{
+                    return tables[i].getTableText()
+                }
+            } catch (error) {
+                // 获取堆栈信息
+                const stack = error.stack;
+                let lineNumber = '未知行';
+                if (stack) {
+                    // 尝试从堆栈信息中提取行号，这里假设堆栈信息格式是常见的格式，例如 "at functionName (http://localhost:8080/file.js:12:34)"
+                    const match = stack.match(/:(\d+):/); // 匹配冒号和数字，例如 ":12:"
+                    if (match && match[1]) {
+                        lineNumber = match[1] + '行';
+                    } else {
+                        // 如果无法提取到行号，则显示完整的堆栈信息，方便调试
+                        lineNumber = '行号信息提取失败，堆栈信息：' + stack;
+                    }
+                }
+                toastr.error(`记忆插件：表格数据注入失败\n原因：${error.message}\n位置：第${lineNumber}`);
+                return ""
+            }
+        })
+    }
+    
+}
+function getTableData(){
+    const { tables } = findLastestTableData(true)
+    const tableData = []
+    for(let table of tables){
+        const content = table.content;
+        const columns = table.columns;
+        const values = [];
+        for(let row of content){
+            const obj = {};
+            for(let i = 0; i < columns.length; i++){
+                obj[columns[i]] = row[i];
+            }
+            values.push(obj);
+        }
+        tableData.push(values)
+    }
+    console.log('获取所有表格数据完成', tableData);
+    return tableData;
+}
 jQuery(async () => {
     fetch("http://api.muyoo.com.cn/check-version", {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientVersion: VERSION, user: getContext().name1 })
@@ -3082,6 +3132,8 @@ jQuery(async () => {
     const html = await renderExtensionTemplateAsync('third-party/st-memory-enhancement', 'index');
     const buttonHtml = await renderExtensionTemplateAsync('third-party/st-memory-enhancement', 'buttons');
     getContext().registerMacro("tableData", () => getMacroPrompt())
+    registerSingleTableMacro()
+    window.getTableData = getTableData; // 暴露函数以供其他地方调用
     // 开始添加各部分的根DOM
     // 添加表格编辑工具栏
     $('#translation_container').append(html);
