@@ -845,7 +845,7 @@ class Table {
         container.classList.add('scrollable')
 
         const title = document.createElement('h3')
-        title.innerText = replaceUserTag(this.tableName)
+        title.innerText = replaceUserTag(`${this.tableIndex}: ${this.tableName}`)
 
         const table = document.createElement('table')
         if (userTableEditInfo.editAble) {
