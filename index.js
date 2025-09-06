@@ -2372,9 +2372,21 @@ async function exportTable(tables = []) {
         toastr.warning('当前表格没有数据，无法导出');
         return;
     }
-
-    const jsonTables = JSON.stringify(tables, null, 2); // 使用 2 空格缩进，提高可读性
-    const blob = new Blob([jsonTables], { type: 'application/json' });
+    var template = "";
+    for (let i = 0 ; i < tables.length ; i++ ) {
+        const table = tables[i]
+        for (let j = 0 ; j < table.content.length ; j++ ) {
+            const row = table.content[j]
+            const obj = {};
+            for (let k = 0 ; k < row.length ; k++ ) {
+                obj[k] = row[k]
+            }
+            template += `insertRow(${i},${JSON.stringify(obj)})\n`
+        }    
+    }    
+    // const jsonTables = JSON.stringify(tables, null, 2); // 使用 2 空格缩进，提高可读性
+    // const blob = new Blob([jsonTables], { type: 'application/json' });
+    const blob = new Blob([template], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const downloadLink = document.createElement('a');
     downloadLink.href = url;
