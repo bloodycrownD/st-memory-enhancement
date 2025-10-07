@@ -2477,6 +2477,26 @@ function parseTableRender(html, table) {
 
     return html;
 }
+function escapeIframeContent(input) {
+  // 匹配 <iframe> 标签及其内容
+  return input.replace(/<iframe\b([^>]*)>([\s\S]*?)<\/iframe>/gi, (match, attributes, content) => {
+    // 转义内容中的特殊字符
+    const escapedContent = content
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    
+    // 如果已有 srcdoc 属性，保留原属性并添加转义内容
+    if (/<iframe\b[^>]*\bsrcdoc=/i.test(match)) {
+      return match; // 已有 srcdoc，不做处理
+    }
+    
+    // 返回新的 iframe，添加 srcdoc 属性
+    return `<iframe${attributes} srcdoc="${escapedContent}"></iframe>`;
+  });
+}
 /**
  * +.将table数据推送至聊天内容中显示
  * @param tableStatusHTML 表格状态html
@@ -2505,7 +2525,7 @@ function replaceTableToStatusTag(tableStatusHTML) {
             tableStatusContainer.removeEventListener('touchend', touchendHandler);
             chatContainer.removeChild(tableStatusContainer); // 移除旧的 tableStatusContainer
         }
-        chatContainer.insertAdjacentHTML('beforeend', `<div class="wide100p" id="tableStatusContainer">${r}</div>`);
+        chatContainer.insertAdjacentHTML('beforeend', `<div class="wide100p" id="tableStatusContainer">${escapeIframeContent(r)}</div>`);
         // 获取新创建的 tableStatusContainer
         const newTableStatusContainer = chatContainer?.querySelector('#tableStatusContainer');
         if (newTableStatusContainer) {
