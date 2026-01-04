@@ -1079,38 +1079,144 @@ class TableEditAction {
 }
 
 /**
- * 将匹配到的整体字符串转化为单个语句的数组
- * @param {string[]} matches 匹配到的整体字符串
- * @returns 单条执行语句数组
+ * 将匹配到的整体字符串转化为单个语句的数组，并按 tableIndex 和 操作类型排序
+ * 排序规则：TableIndex 升序 -> (insert -> update -> delete)
+ * @param {string[]} matches 匹配到的整体字符串数组
+ * @returns {string[]} 排序并格式化后的执行语句数组
  */
 function handleTableEditTag(matches) {
-    let functionList = [];
+    let rawStatements = [];
+
+    // 1. 解析阶段：将所有文本块解析为独立的语句对象
     matches.forEach(matchBlock => {
-        const lines = trimString(matchBlock)
-            .split('\n')
-            .filter(line => line.length > 0);
-        let currentFunction = '';
+        // 简单的预处理，去除首尾空白
+        const content = (matchBlock || '').trim();
+        if (!content) return;
+
+        let currentStmt = '';
         let parenthesisCount = 0;
-        for (const line of lines) {
-            const trimmedLine = line.trim()
-            if (trimmedLine.startsWith('//')) {
-                functionList.push(trimmedLine)
-                continue
-            };
-            currentFunction += trimmedLine;
-            parenthesisCount += (trimmedLine.match(/\(/g) || []).length;
-            parenthesisCount -= (trimmedLine.match(/\)/g) || []).length;
-            if (parenthesisCount === 0 && currentFunction) {
-                const formatted = currentFunction
-                    .replace(/\s*\(\s*/g, '(')   // 移除参数括号内空格
-                    .replace(/\s*\)\s*/g, ')')   // 移除结尾括号空格
-                    .replace(/\s*,\s*/g, ',');   // 统一逗号格式
-                functionList.push(formatted);
-                currentFunction = '';
+        let inString = false; // 是否在字符串内
+        let stringChar = '';  // 记录当前字符串是用 ' 还是 " 包裹
+
+        for (let i = 0; i < content.length; i++) {
+            const char = content[i];
+
+            // 处理字符串状态 (防止字符串里的 ; 或 ) 干扰逻辑)
+            // 简单判断：如果不是转义字符后的引号，则切换字符串状态
+            if ((char === '"' || char === "'") && content[i - 1] !== '\\') {
+                if (!inString) {
+                    inString = true;
+                    stringChar = char;
+                } else if (char === stringChar) {
+                    inString = false;
+                }
+            }
+
+            // 处理注释 (行首的 //)
+            // 如果遇到 // 且不在字符串内，且当前没有未闭合的括号（防止 url 中的 //）
+            if (!inString && char === '/' && content[i + 1] === '/') {
+                // 如果 buffer 中有内容，先作为一条语句存入
+                if (currentStmt.trim()) {
+                    rawStatements.push({ text: currentStmt.trim(), isComment: false });
+                    currentStmt = '';
+                }
+                // 提取整行注释
+                let endLineIndex = content.indexOf('\n', i);
+                if (endLineIndex === -1) endLineIndex = content.length;
+                const comment = content.substring(i, endLineIndex);
+                rawStatements.push({ text: comment.trim(), isComment: true });
+                
+                i = endLineIndex; // 跳过这行
+                continue;
+            }
+
+            // 括号计数 (不在字符串内时)
+            if (!inString) {
+                if (char === '(') parenthesisCount++;
+                if (char === ')') parenthesisCount--;
+            }
+
+            // 判断语句结束: 括号平衡 且 (遇到了分号 或 换行符)
+            // 注意：如果是在括号内的换行符（如JSON换行），不应截断
+            if (!inString && parenthesisCount === 0 && (char === ';' || char === '\n')) {
+                if (currentStmt.trim()) {
+                    rawStatements.push({ text: currentStmt.trim(), isComment: false });
+                }
+                currentStmt = ''; // 重置 buffer
+            } else {
+                // 如果是换行符，为了最终格式美观，替换为空格；否则追加字符
+                if (char === '\n') {
+                    currentStmt += ' '; 
+                } else {
+                    currentStmt += char;
+                }
             }
         }
+
+        // 处理最后剩余的 buffer
+        if (currentStmt.trim()) {
+            rawStatements.push({ text: currentStmt.trim(), isComment: false });
+        }
     });
-    return functionList;
+
+    // 2. 分析与格式化阶段
+    const parsedList = rawStatements.map(item => {
+        // 如果是注释，直接标记优先级为最低（或者最高，看需求，这里设为 -1 置顶，或不参与排序逻辑）
+        // 假设注释不参与排序逻辑，仅保留。为了简单，这里将注释视为 index=-1
+        if (item.isComment) {
+            return {
+                formatted: item.text,
+                tableIndex: -1,
+                typeWeight: 0,
+                originalIndex: -1 // 保持原位难做，通常排序会打乱注释
+            };
+        }
+
+        // 格式化字符串 (保留原有的正则逻辑)
+        const formatted = item.text
+            .replace(/\s+/g, ' ')        // 压缩多余空格
+            .replace(/\s*\(\s*/g, '(')   // 移除参数括号内空格
+            .replace(/\s*\)\s*/g, ')')   // 移除结尾括号空格
+            .replace(/\s*,\s*/g, ',');   // 统一逗号格式
+
+        // 正则提取 tableIndex 和 方法名
+        // 匹配 insertRow(0, ... 或 deleteRow(1, ...
+        const match = formatted.match(/^(insertRow|updateRow|deleteRow)\((\d+)/);
+        
+        let tableIndex = 9999; // 默认放最后
+        let typeWeight = 99;   // 默认权重
+
+        if (match) {
+            const funcName = match[1];
+            tableIndex = parseInt(match[2], 10);
+
+            // 设置排序权重
+            if (funcName === 'insertRow') typeWeight = 1;
+            else if (funcName === 'updateRow') typeWeight = 2;
+            else if (funcName === 'deleteRow') typeWeight = 3;
+        }
+
+        return {
+            formatted,
+            tableIndex,
+            typeWeight
+        };
+    });
+
+    // 3. 排序阶段
+    parsedList.sort((a, b) => {
+        // 规则1: 按 tableIndex 升序
+        if (a.tableIndex !== b.tableIndex) {
+            return a.tableIndex - b.tableIndex;
+        }
+        // 规则2: 相同 tableIndex，按 insert(1) -> update(2) -> delete(3) 排序
+        return a.typeWeight - b.typeWeight;
+        
+        // 规则3 (隐含): 如果类型也相同，保持原有相对顺序 (JS sort 默认为稳定排序)
+    });
+
+    // 4. 输出阶段
+    return parsedList.map(item => item.formatted);
 }
 /**
  * 检查表格编辑字符串是否改变
