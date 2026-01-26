@@ -688,18 +688,47 @@ class Table {
         this.updatedRows = []
     }
 
-    /**
-     * 获取表格内容的提示词，可以通过指定['title', 'node', 'headers', 'rows', 'editRules']中的部分，只获取部分内容
+/**
+     * 获取表格内容的提示词，以 Markdown 格式返回。
+     * 可以通过指定['title', 'node', 'headers', 'rows', 'editRules']中的部分，只获取部分内容
      * @returns 表格内容提示词
      */
     getTableText(customParts = ['title', 'node', 'headers', 'rows', 'editRules']) {
         const structure = findTableStructureByIndex(this.tableIndex);
         if (!structure) return;
 
-        const title = `* ${this.tableIndex}:${replaceUserTag(this.tableName)}\n`;
-        const headers = "rowIndex," + this.columns.map((colName, index) => index + ':' + replaceUserTag(colName)).join(',') + '\n';
+        // 辅助函数：处理单元格内容（转义管道符，处理换行，处理 undefined/null）
+        const formatCell = (content) => {
+            if (content === null || content === undefined) return '';
+            return String(content)
+                .replace(/\|/g, '\\|')        // 转义管道符，防止破坏表格结构
+                .replace(/(\r\n|\n|\r)/g, '<br>'); // 保持换行处理
+        };
+
+        // 1. 标题部分
+        const title = `### 表格 ${this.tableIndex}: ${replaceUserTag(this.tableName)}\n\n`;
+
+        // 2. 表头部分 (Markdown 格式: | rowIndex | ColA | ColB |)
+        // 注意：原代码加了 'rowIndex'，这里保留该逻辑
+        const headerNames = ["rowIndex", ...this.columns.map(colName => replaceUserTag(colName))];
+        const headersLine = `| ${headerNames.join(' | ')} |\n`;
+        
+        // 3. 分隔线部分 (Markdown 必须: | --- | --- |)
+        // 针对20+字段，这对 LLM 识别对齐非常重要
+        const separatorLine = `| ${headerNames.map(() => '---').join(' | ')} |\n`;
+
+        // 4. 数据行部分
         const newContent = this.content.filter(Boolean);
-        const rows = newContent.length > 0 ? (newContent.map((row, index) => index + ',' + row.join(',').replace(/(\r\n|\n|\r)/g,'<br>')).join('\n') + '\n') : "";
+        let rows = "";
+        
+        if (newContent.length > 0) {
+            rows = newContent.map((row, index) => {
+                // 组合 rowIndex 和 实际数据
+                const rowData = [index, ...row];
+                // 格式化每个单元格并用管道符连接
+                return `| ${rowData.map(cell => formatCell(cell)).join(' | ')} |`;
+            }).join('\n') + '\n';
+        }
 
         let result = '';
 
@@ -708,13 +737,17 @@ class Table {
         }
 
         if (customParts.includes('headers')) {
-            //删除【表格内容】
-            result += headers;
-        }
-        if (customParts.includes('rows')) {
-            result += rows;
+            result += headersLine;
+            // 如果只有 headers 没有 rows，通常也建议带上分隔线，否则不是合法的 Markdown 表格
+            result += separatorLine;
         }
 
+        if (customParts.includes('rows')) {
+            // 如果请求了 rows 但没有请求 headers，为了让 LLM 理解这是表格，
+            // 理论上应该补全头，但按照函数逻辑只返回 rows。
+            // 这种情况下直接返回行数据即可。
+            result += rows;
+        }
 
         return result;
     }
