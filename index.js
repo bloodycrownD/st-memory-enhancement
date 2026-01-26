@@ -697,20 +697,16 @@ class Table {
         if (!structure) return;
 
         const title = `* ${this.tableIndex}:${replaceUserTag(this.tableName)}\n`;
-        const node = structure.note && structure.note !== '' ? '【说明】' + structure.note + '\n' : '';
         const headers = "rowIndex," + this.columns.map((colName, index) => index + ':' + replaceUserTag(colName)).join(',') + '\n';
         const newContent = this.content.filter(Boolean);
-        const rows = newContent.length > 0 ? (newContent.map((row, index) => index + ',' + row.join(',')).join('\n') + '\n') : getEmptyTablePrompt(structure.Required, replaceUserTag(structure.initNode));
-        const editRules = getTableEditRules(structure, newContent.length === 0) + '\n';
+        const rows = newContent.length > 0 ? (newContent.map((row, index) => index + ',' + row.join(',').replace(/(\r\n|\n|\r)/g,'<br>')).join('\n') + '\n') : "";
 
         let result = '';
 
         if (customParts.includes('title')) {
             result += title;
         }
-        if (customParts.includes('node')) {
-            result += node;
-        }
+
         if (customParts.includes('headers')) {
             //删除【表格内容】
             result += headers;
@@ -718,9 +714,7 @@ class Table {
         if (customParts.includes('rows')) {
             result += rows;
         }
-        if (customParts.includes('editRules')) {
-            result += editRules;
-        }
+
 
         return result;
     }
@@ -985,6 +979,41 @@ function updateRow(tableIndex, rowIndex, data) {
 }
 
 /**
+ * 追加内容到指定单元格
+ * @param {number} tableIndex 表格索引
+ * @param {number} rowIndex 行索引
+ * @param {object} data 追加的数据，格式为 {colIndex: "要追加的内容"}
+ */
+function append(tableIndex, rowIndex, data) {
+    if (tableIndex == null) return toastr.error('append函数，tableIndex函数为空');
+    if (rowIndex == null) return toastr.error('append函数，rowIndex函数为空');
+    if (data == null) return toastr.error('append函数，data函数为空');
+    
+    const table = waitingTable[tableIndex];
+    if (!table) return toastr.error(`append函数，表格索引 ${tableIndex} 不存在`);
+    
+    const row = table.content[rowIndex];
+    if (!row) return toastr.error(`append函数，行索引 ${rowIndex} 不存在`);
+    
+    Object.entries(data).forEach(([colIndex, appendContent]) => {
+        const colIdx = parseInt(colIndex);
+        if (colIdx < 0 || colIdx >= table.columns.length) {
+            console.warn(`append函数，列索引 ${colIdx} 超出范围`);
+            return;
+        }
+        
+        const currentContent = row[colIdx] || '';
+        const separator = currentContent && appendContent ? '\n' : '';
+        row[colIdx] = currentContent + separator + appendContent;
+        
+        // 记录更新操作
+        table.updatedRows.push(`${rowIndex}-${colIndex}`);
+    });
+    
+    console.log(`追加内容成功: table ${tableIndex}, row ${rowIndex}`, data);
+}
+
+/**
  * 清除表格中的所有空行
  */
 function clearEmpty() {
@@ -1044,7 +1073,7 @@ class TableEditAction {
         }
     }
 
-    execute() {
+execute() {
         try {
             switch (this.type) {
                 case 'Update':
@@ -1057,13 +1086,16 @@ class TableEditAction {
                 case 'Delete':
                     deleteRow(this.tableIndex, this.rowIndex)
                     break
+                case 'Append':
+                    append(this.tableIndex, this.rowIndex, this.data)
+                    break
             }
         } catch (err) {
             toastr.error('表格操作函数执行错误，请重新生成本轮文本\n错误语句：' + this.str + '\n错误信息：' + err.message);
         }
     }
 
-    format() {
+format() {
         switch (this.type) {
             case 'Update':
                 return `updateRow(${this.tableIndex}, ${this.rowIndex}, ${JSON.stringify(this.data).replace(/\\"/g, '"')})`
@@ -1071,6 +1103,8 @@ class TableEditAction {
                 return `insertRow(${this.tableIndex}, ${JSON.stringify(this.data).replace(/\\"/g, '"')})`
             case 'Delete':
                 return `deleteRow(${this.tableIndex}, ${this.rowIndex})`
+            case 'Append':
+                return `appendRow(${this.tableIndex}, ${this.rowIndex}, ${JSON.stringify(this.data).replace(/\\"/g, '"')})`
             default:
                 return this.str
         }
@@ -1179,9 +1213,9 @@ function handleTableEditTag(matches) {
             .replace(/\s*\)\s*/g, ')')   // 移除结尾括号空格
             .replace(/\s*,\s*/g, ',');   // 统一逗号格式
 
-        // 正则提取 tableIndex 和 方法名
-        // 匹配 insertRow(0, ... 或 deleteRow(1, ...
-        const match = formatted.match(/^(insertRow|updateRow|deleteRow)\((\d+)/);
+// 正则提取 tableIndex 和 方法名
+        // 匹配 insertRow(0, ... 或 deleteRow(1, ... 或 append(0, ...
+        const match = formatted.match(/^(insertRow|updateRow|deleteRow|appendRow)\((\d+)/);
         
         let tableIndex = 9999; // 默认放最后
         let typeWeight = 99;   // 默认权重
@@ -1193,6 +1227,7 @@ function handleTableEditTag(matches) {
             // 设置排序权重
             if (funcName === 'insertRow') typeWeight = 1;
             else if (funcName === 'updateRow') typeWeight = 2;
+            else if (funcName === 'appendRow') typeWeight = 2.5;
             else if (funcName === 'deleteRow') typeWeight = 3;
         }
 
@@ -1259,8 +1294,9 @@ function isTableEditFunction(str) {
     if (str.startsWith("update(") || str.startsWith("updateRow(")) type = 'Update'
     if (str.startsWith("insert(") || str.startsWith("insertRow(")) type = 'Insert'
     if (str.startsWith("delete(") || str.startsWith("deleteRow(")) type = 'Delete'
+    if (str.startsWith("append(") || str.startsWith("appendRow(")) type = 'Append'
     if (str.startsWith("update(") || str.startsWith("insert(") || str.startsWith("delete(")) editErrorInfo.functionNameError = true
-    if (type !== 'Comment') newFunctionStr = str.replace(/^(insertRow|deleteRow|updateRow|update|insert|delete)\s*/, '').trim()
+    if (type !== 'Comment') newFunctionStr = str.replace(/^(insertRow|deleteRow|updateRow|appendRow|update|insert|delete|append)\s*/, '').trim()
     return { type, newFunctionStr }
 }
 
@@ -1776,7 +1812,7 @@ async function openTableHistoryPopup() {
                                         const indexData = renderResult.indexData; // 从返回结果中获取 indexData
                                         const funcIcon = renderWithType();
 
-                                        // 根据函数类型添加不同的背景色和图标
+// 根据函数类型添加不同的背景色和图标
                                         function renderWithType() {
                                             if (func.startsWith('insertRow')) {
                                                 $leftRectangle.addClass('insert-item');
@@ -1784,6 +1820,9 @@ async function openTableHistoryPopup() {
                                             } else if (func.startsWith('updateRow')) {
                                                 $leftRectangle.addClass('update-item');
                                                 return `<i class="fa-solid fa-pen"></i>`;
+                                            } else if (func.startsWith('append')) {
+                                                $leftRectangle.addClass('append-item');
+                                                return `<i class="fa-solid fa-link"></i>`;
                                             } else if (func.startsWith('deleteRow')) {
                                                 $leftRectangle.addClass('delete-item');
                                                 return `<i class="fa-solid fa-trash"></i>`;
@@ -1840,12 +1879,11 @@ async function openTableHistoryPopup() {
  */
 function validateFunctionFormat(funcStr) {
     const trimmedFuncStr = funcStr.trim();
-    if (!(trimmedFuncStr.startsWith('insertRow') || trimmedFuncStr.startsWith('updateRow') || trimmedFuncStr.startsWith('deleteRow'))) {
+    if (!(trimmedFuncStr.startsWith('insertRow') || trimmedFuncStr.startsWith('updateRow') || trimmedFuncStr.startsWith('deleteRow') || trimmedFuncStr.startsWith('appendRow'))) {
         return false;
     }
 
-    const functionName = trimmedFuncStr.split('(')[0];
-    const paramsStr = trimmedFuncStr.substring(trimmedFuncStr.indexOf('(') + 1, trimmedFuncStr.lastIndexOf(')'));
+    let functionName = trimmedFuncStr.split('(')[0];
     const params = parseFunctionDetails(trimmedFuncStr).params; // Reuse parseFunctionDetails to get params array
 
     if (functionName === 'insertRow') {
@@ -1856,6 +1894,14 @@ function validateFunctionFormat(funcStr) {
             if (params[1].hasOwnProperty(key) && isNaN(Number(key))) return false;
         }
     } else if (functionName === 'updateRow') {
+        if (params.length !== 3) return false;
+        if (typeof params[0] !== 'number') return false;
+        if (typeof params[1] !== 'number') return false;
+        if (typeof params[2] !== 'object' || params[2] === null) return false;
+        for (const key in params[2]) {
+            if (params[2].hasOwnProperty(key) && isNaN(Number(key))) return false;
+        }
+    } else if (functionName === 'appendRow') {
         if (params.length !== 3) return false;
         if (typeof params[0] !== 'number') return false;
         if (typeof params[1] !== 'number') return false;
@@ -1878,7 +1924,7 @@ function validateFunctionFormat(funcStr) {
  * @returns {object} 包含函数名和参数的对象，参数为数组
  */
 function parseFunctionDetails(funcStr) {
-    const nameMatch = funcStr.match(/^(insertRow|updateRow|deleteRow)\(/);
+    const nameMatch = funcStr.match(/^(insertRow|updateRow|deleteRow|appendRow)\(/);
     const name = nameMatch ? nameMatch[1] : funcStr.split('(')[0];
     let paramsStr = funcStr.substring(funcStr.indexOf('(') + 1, funcStr.lastIndexOf(')'));
     let params = [];
@@ -1983,6 +2029,23 @@ function renderParamsTable(functionName, params) {
         }
     } else if (functionName === 'updateRow') {
         // updateRow(tableIndex:number, rowIndex:number, data:{[colIndex:number]:string|number})
+        const tableIndex = params[0];
+        const rowIndex = params[1];
+        const data = params[2];
+
+        if (typeof tableIndex === 'number' && typeof rowIndex === 'number' && data && typeof data === 'object') {
+            addIndexRows(tableIndex, rowIndex); // 添加 Table Index 和 Row Index
+            for (const colIndex in data) {
+                if (data.hasOwnProperty(colIndex)) {
+                    const value = data[colIndex];
+                    $tbody.append($('<tr>').append($('<th>').text(`${colIndex}`)).append($('<td>').text(value)));
+                }
+            }
+        } else {
+            $tbody.append(createRawParamsRow(params));
+        }
+} else if (functionName === 'appendRow') {
+        // append(tableIndex:number, rowIndex:number, data:{[colIndex:number]:string|number})
         const tableIndex = params[0];
         const rowIndex = params[1];
         const data = params[2];
