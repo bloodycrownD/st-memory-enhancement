@@ -710,7 +710,7 @@ class Table {
 
         // 2. 表头部分 (Markdown 格式: | rowIndex | ColA | ColB |)
         // 注意：原代码加了 'rowIndex'，这里保留该逻辑
-        const headerNames = ["rowIndex", ...this.columns.map(colName => replaceUserTag(colName))];
+        const headerNames = ["rowIndex", ...this.columns.map((colName, index) => `${replaceUserTag(colName)}(col=${index})`)];
         const headersLine = `| ${headerNames.join(' | ')} |\n`;
         
         // 3. 分隔线部分 (Markdown 必须: | --- | --- |)
