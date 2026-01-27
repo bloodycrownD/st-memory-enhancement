@@ -688,11 +688,11 @@ class Table {
         this.updatedRows = []
     }
 
-/**
-     * 获取表格内容的提示词，以 Markdown 格式返回。
-     * 可以通过指定['title', 'node', 'headers', 'rows', 'editRules']中的部分，只获取部分内容
-     * @returns 表格内容提示词
-     */
+    /**
+         * 获取表格内容的提示词，以 Markdown 格式返回。
+         * 可以通过指定['title', 'node', 'headers', 'rows', 'editRules']中的部分，只获取部分内容
+         * @returns 表格内容提示词
+         */
     getTableText(customParts = ['title', 'node', 'headers', 'rows', 'editRules']) {
         const structure = findTableStructureByIndex(this.tableIndex);
         if (!structure) return;
@@ -712,7 +712,7 @@ class Table {
         // 注意：原代码加了 'rowIndex'，这里保留该逻辑
         const headerNames = ["rowIndex", ...this.columns.map((colName, index) => `${replaceUserTag(colName)}(col=${index})`)];
         const headersLine = `| ${headerNames.join(' | ')} |\n`;
-        
+
         // 3. 分隔线部分 (Markdown 必须: | --- | --- |)
         // 针对20+字段，这对 LLM 识别对齐非常重要
         const separatorLine = `| ${headerNames.map(() => '---').join(' | ')} |\n`;
@@ -720,7 +720,7 @@ class Table {
         // 4. 数据行部分
         const newContent = this.content.filter(Boolean);
         let rows = "";
-        
+
         if (newContent.length > 0) {
             rows = newContent.map((row, index) => {
                 // 组合 rowIndex 和 实际数据
@@ -1021,28 +1021,28 @@ function append(tableIndex, rowIndex, data) {
     if (tableIndex == null) return toastr.error('append函数，tableIndex函数为空');
     if (rowIndex == null) return toastr.error('append函数，rowIndex函数为空');
     if (data == null) return toastr.error('append函数，data函数为空');
-    
+
     const table = waitingTable[tableIndex];
     if (!table) return toastr.error(`append函数，表格索引 ${tableIndex} 不存在`);
-    
+
     const row = table.content[rowIndex];
     if (!row) return toastr.error(`append函数，行索引 ${rowIndex} 不存在`);
-    
+
     Object.entries(data).forEach(([colIndex, appendContent]) => {
         const colIdx = parseInt(colIndex);
         if (colIdx < 0 || colIdx >= table.columns.length) {
             console.warn(`append函数，列索引 ${colIdx} 超出范围`);
             return;
         }
-        
+
         const currentContent = row[colIdx] || '';
         const separator = currentContent && appendContent ? '\n' : '';
         row[colIdx] = currentContent + separator + appendContent;
-        
+
         // 记录更新操作
         table.updatedRows.push(`${rowIndex}-${colIndex}`);
     });
-    
+
     console.log(`追加内容成功: table ${tableIndex}, row ${rowIndex}`, data);
 }
 
@@ -1106,7 +1106,7 @@ class TableEditAction {
         }
     }
 
-execute() {
+    execute() {
         try {
             switch (this.type) {
                 case 'Update':
@@ -1128,7 +1128,7 @@ execute() {
         }
     }
 
-format() {
+    format() {
         switch (this.type) {
             case 'Update':
                 return `updateRow(${this.tableIndex}, ${this.rowIndex}, ${JSON.stringify(this.data).replace(/\\"/g, '"')})`
@@ -1192,7 +1192,7 @@ function handleTableEditTag(matches) {
                 if (endLineIndex === -1) endLineIndex = content.length;
                 const comment = content.substring(i, endLineIndex);
                 rawStatements.push({ text: comment.trim(), isComment: true });
-                
+
                 i = endLineIndex; // 跳过这行
                 continue;
             }
@@ -1213,7 +1213,7 @@ function handleTableEditTag(matches) {
             } else {
                 // 如果是换行符，为了最终格式美观，替换为空格；否则追加字符
                 if (char === '\n') {
-                    currentStmt += ' '; 
+                    currentStmt += ' ';
                 } else {
                     currentStmt += char;
                 }
@@ -1246,10 +1246,10 @@ function handleTableEditTag(matches) {
             .replace(/\s*\)\s*/g, ')')   // 移除结尾括号空格
             .replace(/\s*,\s*/g, ',');   // 统一逗号格式
 
-// 正则提取 tableIndex 和 方法名
+        // 正则提取 tableIndex 和 方法名
         // 匹配 insertRow(0, ... 或 deleteRow(1, ... 或 append(0, ...
         const match = formatted.match(/^(insertRow|updateRow|deleteRow|appendRow)\((\d+)/);
-        
+
         let tableIndex = 9999; // 默认放最后
         let typeWeight = 99;   // 默认权重
 
@@ -1279,7 +1279,7 @@ function handleTableEditTag(matches) {
         }
         // 规则2: 相同 tableIndex，按 insert(1) -> update(2) -> delete(3) 排序
         return a.typeWeight - b.typeWeight;
-        
+
         // 规则3 (隐含): 如果类型也相同，保持原有相对顺序 (JS sort 默认为稳定排序)
     });
 
@@ -1845,7 +1845,7 @@ async function openTableHistoryPopup() {
                                         const indexData = renderResult.indexData; // 从返回结果中获取 indexData
                                         const funcIcon = renderWithType();
 
-// 根据函数类型添加不同的背景色和图标
+                                        // 根据函数类型添加不同的背景色和图标
                                         function renderWithType() {
                                             if (func.startsWith('insertRow')) {
                                                 $leftRectangle.addClass('insert-item');
@@ -2077,7 +2077,7 @@ function renderParamsTable(functionName, params) {
         } else {
             $tbody.append(createRawParamsRow(params));
         }
-} else if (functionName === 'appendRow') {
+    } else if (functionName === 'appendRow') {
         // append(tableIndex:number, rowIndex:number, data:{[colIndex:number]:string|number})
         const tableIndex = params[0];
         const rowIndex = params[1];
@@ -2575,17 +2575,17 @@ async function exportTable(tables = []) {
         return;
     }
     var template = "";
-    for (let i = 0 ; i < tables.length ; i++ ) {
+    for (let i = 0; i < tables.length; i++) {
         const table = tables[i]
-        for (let j = 0 ; j < table.content.length ; j++ ) {
+        for (let j = 0; j < table.content.length; j++) {
             const row = table.content[j]
             const obj = {};
-            for (let k = 0 ; k < row.length ; k++ ) {
+            for (let k = 0; k < row.length; k++) {
                 obj[k] = row[k]
             }
             template += `insertRow(${i},${JSON.stringify(obj)})\n`
-        }    
-    }    
+        }
+    }
     // const jsonTables = JSON.stringify(tables, null, 2); // 使用 2 空格缩进，提高可读性
     // const blob = new Blob([jsonTables], { type: 'application/json' });
     const blob = new Blob([template], { type: 'application/json' });
@@ -2680,24 +2680,24 @@ function parseTableRender(html, table) {
     return html;
 }
 function escapeIframeContent(input) {
-  // 匹配 <iframe> 标签及其内容
-  return input.replace(/<iframe\b([^>]*)>([\s\S]*?)<\/iframe>/gi, (match, attributes, content) => {
-    // 转义内容中的特殊字符
-    const escapedContent = content
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-    
-    // 如果已有 srcdoc 属性，保留原属性并添加转义内容
-    if (/<iframe\b[^>]*\bsrcdoc=/i.test(match)) {
-      return match; // 已有 srcdoc，不做处理
-    }
-    
-    // 返回新的 iframe，添加 srcdoc 属性
-    return `<iframe${attributes} srcdoc="${escapedContent}"></iframe>`;
-  });
+    // 匹配 <iframe> 标签及其内容
+    return input.replace(/<iframe\b([^>]*)>([\s\S]*?)<\/iframe>/gi, (match, attributes, content) => {
+        // 转义内容中的特殊字符
+        const escapedContent = content
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
+        // 如果已有 srcdoc 属性，保留原属性并添加转义内容
+        if (/<iframe\b[^>]*\bsrcdoc=/i.test(match)) {
+            return match; // 已有 srcdoc，不做处理
+        }
+
+        // 返回新的 iframe，添加 srcdoc 属性
+        return `<iframe${attributes} srcdoc="${escapedContent}"></iframe>`;
+    });
 }
 /**
  * +.将table数据推送至聊天内容中显示
@@ -3304,13 +3304,13 @@ const tableInitPopupDom = `<span>将重置以下表格数据，是否继续？</
 
 function registerSingleTableMacro() {
     for (let i = 0; i < 10; i++) {
-        getContext().registerMacro(`tableData[${i}]`, () =>  {
+        getContext().registerMacro(`tableData[${i}]`, () => {
             try {
                 if (extension_settings.muyoo_dataTable.isExtensionAble === false || extension_settings.muyoo_dataTable.isAiReadTable === false) return ""
                 const { tables } = findLastestTableData(true)
-                if(i > tables.length - 1){
+                if (i > tables.length - 1) {
                     return "表格不存在，超出索引范围"
-                }else{
+                } else {
                     return tables[i].getTableText()
                 }
             } catch (error) {
@@ -3332,19 +3332,19 @@ function registerSingleTableMacro() {
             }
         })
     }
-    
+
 }
-function getTableData(){
+function getTableData() {
     const { tables } = findLastestTableData(true)
     const tableData = []
-    for(let table of tables){
+    for (let table of tables) {
         const content = table.content;
         const columns = table.columns;
         const values = [];
-        for(let row of content){
+        for (let row of content) {
             const obj = {};
-            for(let i = 0; i < columns.length; i++){
-                obj[columns[i]] = row[i];
+            for (let i = 0; i < columns.length; i++) {
+                obj[columns[i]] = row[i] ? row[i].replace(/(\r\n|\n|\r)/g, '<br>') || ''
             }
             values.push(obj);
         }
