@@ -3344,7 +3344,7 @@ function getTableData() {
         for (let row of content) {
             const obj = {};
             for (let i = 0; i < columns.length; i++) {
-                obj[columns[i]] = row[i]?.replace(/(\r\n|\n|\r)/g, '<br>')
+                obj[columns[i]] = row[i] ? row[i].replace(/(\r\n|\n|\r)/g, '<br>') : ""
             }
             values.push(obj);
         }
