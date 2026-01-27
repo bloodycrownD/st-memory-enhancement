@@ -3344,7 +3344,12 @@ function getTableData() {
         for (let row of content) {
             const obj = {};
             for (let i = 0; i < columns.length; i++) {
-                obj[columns[i]] = row[i] ? row[i].replace(/(\r\n|\n|\r)/g, '<br>') : ""
+                 const value = row[i];
+                if (typeof value === 'string') {
+                    obj[columns[i]] = value.replace(/(\r\n|\n|\r)/g, '<br>');
+                } else {
+                    obj[columns[i]] = value ?? ""; // 或者 String(value) 如果你想转成字符串
+                }
             }
             values.push(obj);
         }
