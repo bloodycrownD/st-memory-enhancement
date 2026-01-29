@@ -1037,10 +1037,11 @@ function append(tableIndex, rowIndex, data) {
 
         const currentContent = row[colIdx] || '';
         const separator = currentContent && appendContent ? '\n' : '';
-        row[colIdx] = currentContent + separator + appendContent;
-
-        // 记录更新操作
-        table.updatedRows.push(`${rowIndex}-${colIndex}`);
+        if(!currentContent.includes(appendContent)){
+            row[colIdx] = currentContent + separator + appendContent;
+                // 记录更新操作
+            table.updatedRows.push(`${rowIndex}-${colIndex}`);
+        }
     });
 
     console.log(`追加内容成功: table ${tableIndex}, row ${rowIndex}`, data);
